@@ -1,9 +1,9 @@
 #include <FastLED.h>
 
 #define LED_PIN 2
-#define NUM_LEDS 240
+#define NUM_LEDS 300
 #define BRANCH_SIZE 60
-#define BRANCHS 6
+#define BRANCHS 5
 
 CRGB leds[NUM_LEDS];
 
@@ -350,35 +350,34 @@ bool isNumberInArray(int number, int array[], int arraySize) {
 }
 
 void loop() {
-    doLoopStarBlink();
-//    int effects[6] = {-1, -1, -1, -1, -1, -1};
-//    int currentIndex = 0;
-//    while (currentIndex < 6) {
-//        int number = random8(6);
-//        if (!isNumberInArray(number, effects, 6)) {
-//            effects[currentIndex] = number;
-//            ++currentIndex;
-//        }
-//    }
-//    for (int i = 0; i < 6; ++i) {
-//        int effect = effects[i];
-//        if (effect == 0) {
-//            simpleBlink();
-//        }
-//        if (effect == 1) {
-//            doLoopStarBlink();
-//        }
-//        if (effect == 2) {
-//            doCylon();
-//        }
-//        if (effect == 3) {
-//            doExplosion();
-//        }
-//        if (effect == 4) {
-//            shootingStar();
-//        }
-//        if (effect == 5) {
-//            fillingUp();
-//        }
-//    }
+    int effects[6] = {-1, -1, -1, -1, -1, -1};
+    int currentIndex = 0;
+    while (currentIndex < 6) {
+        int number = random8(6);
+        if (!isNumberInArray(number, effects, 6)) {
+            effects[currentIndex] = number;
+            ++currentIndex;
+        }
+    }
+    for (int i = 0; i < 6; ++i) {
+        int effect = effects[i];
+        if (effect == 0) {
+            simpleBlink();
+        }
+        if (effect == 1) {
+            doLoopStarBlink();
+        }
+        if (effect == 2) {
+            doCylon();
+        }
+        if (effect == 3) {
+            doExplosion();
+        }
+        if (effect == 4) {
+            shootingStar();
+        }
+        if (effect == 5) {
+            fillingUp();
+        }
+    }
 }
