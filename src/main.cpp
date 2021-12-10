@@ -401,11 +401,71 @@ void impact(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, 
     }
 }
 
+void impacts(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, CRGB mainColor2) {
+    random16_add_entropy(analogRead(A0));
+    setAll(0, 0, 0);
+    CRGB color1 = mainColor1;
+    CRGB color2 = mainColor2;
+    int branchIndexes[2] = {2, 0};
+    int starts[2];
+    int ends[2];
+    int branchStarts[2];
+    int relativeStarts[2];
+    int branchEnds[2];
+    int pixelDowns[2];
+    int pixelUps[2];
+    for (int i = 0; i < 2; ++i) {
+        starts[i] = random16(BRANCH_SIZE);
+        ends[i] = starts[i] + blastRadius;
+        branchStarts[i] = branchIndexes[i] * BRANCH_SIZE;
+        relativeStarts[i] = starts[i] + branchStarts[i];
+        branchEnds[i] = branchStarts[i] + BRANCH_SIZE;
+        pixelDowns[i] = relativeStarts[i];
+        pixelUps[i] = relativeStarts[i];
+    }
+
+    for (int step = 0; step < blastRadius; ++step) {
+        for (int i = 0; i < 2; ++i) {
+            int index = step + starts[i];
+            if (pixelDowns[i] <= branchEnds[i]) {
+                setPixel(pixelDowns[i], mainColor1.red, mainColor1.green, mainColor1.blue, 0);
+                if (index > (starts[i] + tailTotal)) {
+                    setPixel(pixelDowns[i] - tailTotal, 0, 0, 0, 0);
+                }
+            }
+            if (pixelUps[i] >= branchStarts[i]) {
+                setPixel(pixelUps[i], mainColor2.red, mainColor2.green, mainColor2.blue, 0);
+                if (index > (starts[i] + tailTotal)) {
+                    setPixel(pixelUps[i] + tailTotal, 0, 0, 0, 0);
+                }
+            }
+            int darknessFactor = 45;
+            for (int tailSize = 1; tailSize < tailTotal; ++tailSize) {
+                color1.addToRGB(0x01);
+                color2.addToRGB(0x01);
+                if (index > (starts[i] + tailSize - 1)) {
+                    if (pixelDowns[i] - tailSize <= branchEnds[i]) {
+                        setPixel(pixelDowns[i] - tailSize, color1.red, color1.green, color1.blue, tailSize * darknessFactor);
+                    }
+                    if (pixelUps[i] + tailSize >= branchStarts[i]) {
+                        setPixel(pixelUps[i] + tailSize, color2.red , color2.green, color2.blue, tailSize * darknessFactor);
+                    }
+                }
+            }
+            setPixel(relativeStarts[i], centralColor.red, centralColor.green, centralColor.blue, 0);
+            pixelDowns[i]++;
+            pixelUps[i]--;
+        }
+        showStrip();
+        delay((step) * 8);
+    }
+}
+
 void doImpact() {
     CRGB colors[5] = {CRGB(0xff, 0, 0), CRGB(0xff, 0xff, 0), CRGB(0xff, 0xa5, 0), CRGB(0, 0xff, 0), CRGB(0, 0, 0xff)};
     for (int i = 0; i < 20; ++i) {
         int colorIndex = random(5);
-        impact(15, 8, CRGB(0xff, 0xff, 0), colors[colorIndex], colors[colorIndex]);
+        impacts(15, 8, CRGB(0xff, 0xff, 0), colors[colorIndex], colors[colorIndex]);
     }
 }
 
