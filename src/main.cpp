@@ -1,44 +1,51 @@
 #include <FastLED.h>
 
 #define LED_PIN 2
-#define NUM_LEDS 300
+#define NUM_LEDS 240
 #define BRANCH_SIZE 60
-#define BRANCHS 5
+#define BRANCHS 4
 
 CRGB leds[NUM_LEDS];
 
 void setup() {
     FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
-    FastLED.setMaxPowerInVoltsAndMilliamps(5, 2000);
-    FastLED.setBrightness(200);
+    FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
+    FastLED.setBrightness(255);
     FastLED.clear();
     FastLED.show();
     Serial.begin( 9600 );
+    random16_set_seed(millis());
 }
 
 void showStrip() {
     FastLED.show();
 }
 
-void setPixel(int pixel, byte red, byte green, byte blue) {
+void setPixel(int pixel, byte red, byte green, byte blue, int darkness) {
     leds[pixel].r = red;
     leds[pixel].g = green;
     leds[pixel].b = blue;
+    if (darkness > 250) {
+        darkness = 250;
+    }
+    if (darkness > 0) {
+        leds[pixel].fadeToBlackBy(darkness);
+    }
 }
 
 void setAll(byte red, byte green, byte blue) {
     for (int i = 0; i < NUM_LEDS; i++) {
-        setPixel(i, red, green, blue);
+        setPixel(i, red, green, blue, 0);
     }
     showStrip();
 }
 
 void setEyeColors(int eyeIndex, int eyeSize, byte red, byte green, byte blue) {
-    setPixel(eyeIndex, red / 10, green / 10, blue / 10);
+    setPixel(eyeIndex, red / 10, green / 10, blue / 10, 0);
     for (int j = 1; j <= eyeSize; j++) {
-        setPixel(eyeIndex + j, red, green, blue);
+        setPixel(eyeIndex + j, red, green, blue, 0);
     }
-    setPixel(eyeIndex + eyeSize + 1, red / 10, green / 10, blue / 10);
+    setPixel(eyeIndex + eyeSize + 1, red / 10, green / 10, blue / 10, 0);
 }
 
 void nblendU8TowardU8( uint8_t& cur, const uint8_t target, uint8_t amount) {
@@ -114,10 +121,127 @@ void starsBlink(int starsQuantity, bool decreaseNumber, int startLimit, int fade
             randLed = random(NUM_LEDS);
         }
         for (int & index : randLeds) {
-            setPixel(index, starsColors.r, starsColors.g, starsColors.b);
+            setPixel(index, starsColors.r, starsColors.g, starsColors.b, 0);
         }
         showStrip();
         delay(blinkTime);
+    }
+}
+
+byte flyAway(int start, bool inverted, byte tailColor, int index, int branch) {
+    int invertedIndex = (BRANCH_SIZE - 1) - index;
+    int pixelDown = index + (branch * BRANCH_SIZE);
+    int pixelUp = invertedIndex + (branch * BRANCH_SIZE);
+    setPixel((inverted ? pixelUp : pixelDown), 0, 0xff, 0, 0);
+    setPixel((inverted ? pixelDown : pixelUp), 0xff, 0, 0, 0);
+    for (int tailSize = 1; tailSize < 8; ++tailSize) {
+        tailColor = 0x22 * tailSize;
+        byte red = 0xff - (tailSize * 0x22);
+        byte green = 0xff - (tailSize * 0x22);
+        if (green < tailColor) {
+            green = tailColor;
+            red = tailColor;
+        }
+        if (index > (start + tailSize - 1)) {
+            setPixel(pixelUp + tailSize, (inverted ? tailColor : red), (inverted ? green : tailColor), tailColor, 0);
+            setPixel(pixelDown - tailSize, (inverted ? red : tailColor), (inverted ? tailColor : green), tailColor, 0);
+        }
+    }
+    return tailColor;
+}
+
+byte explosionHalf(int start, int end, bool inverted, int delayMs) {
+    byte tailColor;
+    for (int index = start; index < end; ++index) {
+        for (int branch = 0; branch < BRANCHS; ++branch) {
+            tailColor = flyAway(start, inverted, tailColor, index, branch);
+        }
+        showStrip();
+        delay(delayMs);
+    }
+    return tailColor;
+}
+
+void explosion() {
+    setAll(0, 0, 0);
+    int halfWay = (BRANCH_SIZE / 2);
+    int fillDelay = 120;
+    byte tailColor = explosionHalf(halfWay, BRANCH_SIZE, false, fillDelay);
+    for (int index = BRANCH_SIZE - 8; index <= BRANCH_SIZE; ++index) {
+        for (int branch = 0; branch < BRANCHS; ++branch) {
+            int invertedIndex = (BRANCH_SIZE - 1) - index;
+            int pixelDown = index + (branch * BRANCH_SIZE);
+            int pixelUp = invertedIndex + (branch * BRANCH_SIZE);
+            setPixel(pixelUp, tailColor, tailColor, tailColor, 0);
+            setPixel(pixelDown, tailColor, tailColor, tailColor, 0);
+        }
+        showStrip();
+        delay(fillDelay);
+    }
+    delay(1000);
+    for (int i = 0; i < 12; ++i) {
+        if (i % 2 == 0) {
+            explosionHalf(0, halfWay, true, 10);
+        }
+        else {
+            explosionHalf(halfWay, BRANCH_SIZE, false, 10);
+        }
+    }
+    CRGB colors[5] = {CRGB(255, 255, 255), CRGB(255, 255, 0), CRGB(255, 165, 0), CRGB(255, 0, 0), CRGB( 0, 0, 0)};
+    starsBlink(10, true, 10, 20, 80, 0, colors, 5);
+}
+
+void blinkOnce() {
+    int lightOn = 500;
+    int lightOff = 300;
+    showStrip();
+    delay(lightOn);
+    setAll(0, 0, 0);
+    showStrip();
+    delay(lightOff);
+}
+
+void blinkColors(CRGB color1, CRGB color2, int usePair) {
+    bool showColor1 = true;
+    for (int i = 0; i < NUM_LEDS; ++i) {
+        if (i % 2 == usePair) {
+            if (showColor1) {
+                setPixel(i, color1.r, color1.g, color1.b, 0);
+            }
+            else {
+                setPixel(i, color2.r, color2.g, color2.b, 0);
+            }
+            showColor1 = !showColor1;
+        }
+    }
+    blinkOnce();
+}
+
+void simpleBlink(CRGB color1, CRGB color2, CRGB color3, CRGB color4) {
+    for (int i = 0; i < 5; ++i) {
+        blinkColors(color1, color2, 0);
+        blinkColors(color3, color4, 1);
+        blinkColors(color3, color1, 0);
+        blinkColors(color4, color2, 1);
+        blinkColors(color1, color4, 0);
+        blinkColors(color3, color2, 1);
+    }
+}
+
+void loopStarBlink() {
+    int startQuantity = 1;
+    for (int i = 0; i < 5; ++i) {
+        if (i == 1) {
+            startQuantity = 5;
+        }
+        if (i == 2) {
+            startQuantity = 15;
+        }
+        if (i > 2) {
+            startQuantity *= 2;
+        }
+        CRGB colors[6] = {CRGB(0, 255, 0), CRGB(0, 0, 255), CRGB(255, 255, 0), CRGB(255, 0, 0), CRGB( 255, 255, 255), CRGB(0, 255, 0)};
+        starsBlink(startQuantity, false, 80, 10, 4, 0, colors, 6);
     }
 }
 
@@ -159,7 +283,13 @@ void doCylon() {
     }
 }
 
-void shootingStar() {
+void doExplosion() {
+    for (int i = 0; i < 2; ++i) {
+        explosion();
+    }
+}
+
+void doShootingStar() {
     for (int times = 4; times > 0; --times) {
         for (int loop = 0; loop < 2; ++loop) {
             for (int i = 0; i <= BRANCH_SIZE; ++i) {
@@ -169,10 +299,10 @@ void shootingStar() {
                     for (int tailSize = 1; tailSize <= 8; ++tailSize) {
                         byte blue = 0x11 * tailSize;
                         if (i > tailSize) {
-                            setPixel(pixel - tailSize, 0xff, 0xff, blue);
+                            setPixel(pixel - tailSize, 0xff, 0xff, blue, 0);
                         }
                     }
-                    setPixel(pixel, 0xff, 0xa5, 0);
+                    setPixel(pixel, 0xff, 0xa5, 0, 0);
                 }
                 showStrip();
                 delay(times * 10);
@@ -181,14 +311,20 @@ void shootingStar() {
     }
 }
 
-void fillingUp() {
+void doLoopStarBlink() {
+    for (int i = 0; i < 1; ++i) {
+        loopStarBlink();
+    }
+}
+
+void doFillingUp() {
     setAll(0, 0, 0);
     int stopAt = 0;
     while (stopAt <= BRANCH_SIZE) {
         for (int i = BRANCH_SIZE; i > stopAt; --i) {
             for (int branch = 0; branch < BRANCHS; ++branch) {
                 int pixel = i + (branch * BRANCH_SIZE);
-                setPixel(pixel, 0, 0xff, 0);
+                setPixel(pixel, 0, 0xff, 0, 0);
                 byte tailColor;
                 for (int tailSize = 1; tailSize < 15; ++tailSize) {
                     tailColor = 0x11 * tailSize;
@@ -197,17 +333,17 @@ void fillingUp() {
                         green = tailColor;
                     }
                     if (i < (BRANCH_SIZE - tailSize)) {
-                        setPixel(pixel + tailSize, tailColor, green, tailColor);
+                        setPixel(pixel + tailSize, tailColor, green, tailColor, 0);
                     }
                 }
             }
             showStrip();
-            int delaying = 15;
+            int delaying = 10;
             if (stopAt > (BRANCH_SIZE / 3)) {
-                delaying = 10;
+                delaying = 5;
             }
             if (stopAt > (BRANCH_SIZE / 3 * 2)) {
-                delaying = 5;
+                delaying = 1;
             }
             delay(delaying);
         }
@@ -218,166 +354,94 @@ void fillingUp() {
     starsBlink(30, true, 20, 40, 80, 0, colors, 4);
 }
 
-byte explosionHalf(int start, int end, bool inverted, int delayMs) {
-    byte tailColor;
+void impact(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, CRGB mainColor2) {
+    random16_add_entropy(analogRead(A0));
+    setAll(0, 0, 0);
+    int branchIndex = random16(BRANCHS);
+    int start = random16(BRANCH_SIZE);
+    int end = start + blastRadius;
+    int branchStart = branchIndex * BRANCH_SIZE;
+    int relativeStart = start + branchStart;
+    int branchEnd = branchStart + BRANCH_SIZE;
+    int pixelDown = relativeStart;
+    int pixelUp = relativeStart;
+    CRGB color1 = mainColor1;
+    CRGB color2 = mainColor2;
     for (int index = start; index < end; ++index) {
-        for (int branch = 0; branch < BRANCHS; ++branch) {
-            int invertedIndex = (BRANCH_SIZE - 1) - index;
-            int pixelDown = index + (branch * BRANCH_SIZE);
-            int pixelUp = invertedIndex + (branch * BRANCH_SIZE);
-            setPixel((inverted ? pixelUp : pixelDown), 0, 0xff, 0);
-            setPixel((inverted ? pixelDown : pixelUp), 0xff, 0, 0);
-            for (int tailSize = 1; tailSize < 8; ++tailSize) {
-                tailColor = 0x22 * tailSize;
-                byte red = 0xff - (tailSize * 0x22);
-                byte green = 0xff - (tailSize * 0x22);
-                if (green < tailColor) {
-                    green = tailColor;
-                    red = tailColor;
+        if (pixelDown <= branchEnd) {
+            setPixel(pixelDown, mainColor1.red, mainColor1.green, mainColor1.blue, 0);
+            if (index > (start + tailTotal)) {
+                setPixel(pixelDown - tailTotal, 0, 0, 0, 0);
+            }
+        }
+        if (pixelUp >= branchStart) {
+            setPixel(pixelUp, mainColor2.red, mainColor2.green, mainColor2.blue, 0);
+            if (index > (start + tailTotal)) {
+                setPixel(pixelUp + tailTotal, 0, 0, 0, 0);
+            }
+        }
+        int darknessFactor = 45;
+        for (int tailSize = 1; tailSize < tailTotal; ++tailSize) {
+            color1.addToRGB(0x01);
+            color2.addToRGB(0x01);
+            if (index > (start + tailSize - 1)) {
+                if (pixelDown - tailSize <= branchEnd) {
+                    setPixel(pixelDown - tailSize, color1.red, color1.green, color1.blue, tailSize * darknessFactor);
                 }
-                if (index > (start + tailSize - 1)) {
-                    setPixel(pixelUp + tailSize, (inverted ? tailColor : red), (inverted ? green : tailColor), tailColor);
-                    setPixel(pixelDown - tailSize, (inverted ? red : tailColor), (inverted ? tailColor : green), tailColor);
+                if (pixelUp + tailSize >= branchStart) {
+                    setPixel(pixelUp + tailSize, color2.red , color2.green, color2.blue, tailSize * darknessFactor);
                 }
             }
         }
+        setPixel(relativeStart, centralColor.red, centralColor.green, centralColor.blue, 0);
         showStrip();
-        delay(delayMs);
-    }
-    return tailColor;
-}
-
-void explosion() {
-    setAll(0, 0, 0);
-    int halfWay = (BRANCH_SIZE / 2);
-    int fillDelay = 80;
-    byte tailColor = explosionHalf(halfWay, BRANCH_SIZE, false, fillDelay);
-    for (int index = BRANCH_SIZE - 8; index <= BRANCH_SIZE; ++index) {
-        for (int branch = 0; branch < BRANCHS; ++branch) {
-            int invertedIndex = (BRANCH_SIZE - 1) - index;
-            int pixelDown = index + (branch * BRANCH_SIZE);
-            int pixelUp = invertedIndex + (branch * BRANCH_SIZE);
-            setPixel(pixelUp, tailColor, tailColor, tailColor);
-            setPixel(pixelDown, tailColor, tailColor, tailColor);
-        }
-        showStrip();
-        delay(fillDelay);
-    }
-    delay(1000);
-    for (int i = 0; i < 8; ++i) {
-        if (i % 2 == 0) {
-            explosionHalf(0, halfWay, true, 10);
-        }
-        else {
-            explosionHalf(halfWay, BRANCH_SIZE, false, 10);
-        }
-    }
-    CRGB colors[5] = {CRGB(255, 255, 255), CRGB(255, 255, 0), CRGB(255, 165, 0), CRGB(255, 0, 0), CRGB( 0, 0, 0)};
-    starsBlink(10, true, 10, 20, 80, 0, colors, 5);
-}
-
-void loopStarBlink() {
-    int startQuantity = 1;
-    for (int i = 0; i < 5; ++i) {
-        if (i == 1) {
-            startQuantity = 5;
-        }
-        if (i == 2) {
-            startQuantity = 15;
-        }
-        if (i > 2) {
-            startQuantity *= 2;
-        }
-        CRGB colors[6] = {CRGB(0, 255, 0), CRGB(0, 0, 255), CRGB(255, 255, 0), CRGB(255, 0, 0), CRGB( 255, 255, 255), CRGB(0, 255, 0)};
-        starsBlink(startQuantity, false, 80, 10, 4, 0, colors, 6);
+        delay((index - start) * 8);
+        pixelDown++;
+        pixelUp--;
     }
 }
 
-void blinkOnce() {
-    int lightOn = 500;
-    int lightOff = 300;
-    showStrip();
-    delay(lightOn);
-    setAll(0, 0, 0);
-    showStrip();
-    delay(lightOff);
-}
-
-void blinkColors(CRGB color1, CRGB color2, int usePair) {
-    bool showColor1 = true;
-    for (int i = 0; i < NUM_LEDS; ++i) {
-        if (i % 2 == usePair) {
-            if (showColor1) {
-                setPixel(i, color1.r, color1.g, color1.b);
-            }
-            else {
-                setPixel(i, color2.r, color2.g, color2.b);
-            }
-            showColor1 = !showColor1;
-        }
+void doImpact() {
+    CRGB colors[5] = {CRGB(0xff, 0, 0), CRGB(0xff, 0xff, 0), CRGB(0xff, 0xa5, 0), CRGB(0, 0xff, 0), CRGB(0, 0, 0xff)};
+    for (int i = 0; i < 20; ++i) {
+        int colorIndex = random(5);
+        impact(15, 8, CRGB(0xff, 0xff, 0), colors[colorIndex], colors[colorIndex]);
     }
-    blinkOnce();
-}
-
-void simpleBlink() {
-    for (int i = 0; i < 5; ++i) {
-        blinkColors(CRGB(255, 0, 0), CRGB(255, 255, 0), 0);
-        blinkColors(CRGB(0, 0, 255), CRGB(0, 255, 0), 1);
-        blinkColors(CRGB(255, 0, 255), CRGB(255, 255, 255), 0);
-        blinkColors(CRGB(0, 255, 255), CRGB(100, 255, 0), 1);
-    }
-}
-
-void doExplosion() {
-    for (int i = 0; i < 3; ++i) {
-        explosion();
-    }
-}
-
-void doLoopStarBlink() {
-    for (int i = 0; i < 2; ++i) {
-        loopStarBlink();
-    }
-}
-
-bool isNumberInArray(int number, int array[], int arraySize) {
-    for (int i = 0; i < arraySize; ++i) {
-        if (array[i] == number) {
-            return true;
-        }
-    }
-    return false;
 }
 
 void loop() {
-    int effects[6] = {-1, -1, -1, -1, -1, -1};
-    int currentIndex = 0;
-    while (currentIndex < 6) {
-        int number = random8(6);
-        if (!isNumberInArray(number, effects, 6)) {
-            effects[currentIndex] = number;
-            ++currentIndex;
-        }
-    }
-    for (int i = 0; i < 6; ++i) {
-        int effect = effects[i];
-        if (effect == 0) {
-            simpleBlink();
-        }
-        if (effect == 1) {
-            doLoopStarBlink();
-        }
-        if (effect == 2) {
-            doCylon();
-        }
-        if (effect == 3) {
-            doExplosion();
-        }
-        if (effect == 4) {
-            shootingStar();
-        }
-        if (effect == 5) {
-            fillingUp();
-        }
-    }
+//    doExplosion();
+//    fillingUp();
+//    simpleBlink(CRGB(255, 0, 0), CRGB(255, 255, 0), CRGB(0, 0, 255), CRGB(0, 255, 0));
+    doImpact();
+//    int effects[6] = {-1, -1, -1, -1, -1, -1};
+//    int currentIndex = 0;
+//    while (currentIndex < 6) {
+//        int number = random8(6);
+//        if (!isNumberInArray(number, effects, 6)) {
+//            effects[currentIndex] = number;
+//            ++currentIndex;
+//        }
+//    }
+//    for (int i = 0; i < 6; ++i) {
+//        int effect = effects[i];
+//        if (effect == 0) {
+//            simpleBlink(CRGB(255, 0, 0), CRGB(255, 255, 0), CRGB(0, 0, 255), CRGB(0, 255, 0));
+//        }
+//        if (effect == 1) {
+//            doLoopStarBlink();
+//        }
+//        if (effect == 2) {
+//            doCylon();
+//        }
+//        if (effect == 3) {
+//            doExplosion();
+//        }
+//        if (effect == 4) {
+//            doShootingStar();
+//        }
+//        if (effect == 5) {
+//            doFillingUp();
+//        }
+//    }
 }
