@@ -1,9 +1,9 @@
 #include <FastLED.h>
 
 #define LED_PIN 2
-#define NUM_LEDS 240
+#define NUM_LEDS 300
 #define BRANCH_SIZE 60
-#define BRANCHS 4
+#define BRANCHS 5
 
 CRGB leds[NUM_LEDS];
 
@@ -351,10 +351,19 @@ void doFillingUp() {
     }
 
     CRGB colors[5] = {CRGB(0, 255, 0), CRGB(0, 255, 255), CRGB(0, 100, 100), CRGB( 0, 0, 0)};
-    starsBlink(30, true, 20, 40, 80, 0, colors, 4);
+    starsBlink(30, true, 20, 40, 80, 0, colors, 5);
 }
 
-void impact(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, CRGB mainColor2) {
+void fadeOut(int steps, uint8_t progress) {
+    for (int step = 0; step < steps; ++step) {
+        for (int i = 0; i < NUM_LEDS; ++i) {
+            leds[i].fadeToBlackBy(progress);
+        }
+        showStrip();
+    }
+}
+
+void impact(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, CRGB mainColor2, int delayFactor) {
     random16_add_entropy(analogRead(A0));
     setAll(0, 0, 0);
     int branchIndex = random16(BRANCHS);
@@ -395,26 +404,27 @@ void impact(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, 
         }
         setPixel(relativeStart, centralColor.red, centralColor.green, centralColor.blue, 0);
         showStrip();
-        delay((index - start) * 8);
+        delay((index - start) * delayFactor);
         pixelDown++;
         pixelUp--;
     }
+    fadeOut(50, 20);
 }
 
-void impacts(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, CRGB mainColor2) {
+void impacts(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1, CRGB mainColor2, int delayFactor, bool fadingOut) {
     random16_add_entropy(analogRead(A0));
     setAll(0, 0, 0);
     CRGB color1 = mainColor1;
     CRGB color2 = mainColor2;
-    int branchIndexes[2] = {2, 0};
-    int starts[2];
-    int ends[2];
-    int branchStarts[2];
-    int relativeStarts[2];
-    int branchEnds[2];
-    int pixelDowns[2];
-    int pixelUps[2];
-    for (int i = 0; i < 2; ++i) {
+    int branchIndexes[BRANCHS] = {2, 0, 3, 1};
+    int starts[BRANCHS];
+    int ends[BRANCHS];
+    int branchStarts[BRANCHS];
+    int relativeStarts[BRANCHS];
+    int branchEnds[BRANCHS];
+    int pixelDowns[BRANCHS];
+    int pixelUps[BRANCHS];
+    for (int i = 0; i < BRANCHS; ++i) {
         starts[i] = random16(BRANCH_SIZE);
         ends[i] = starts[i] + blastRadius;
         branchStarts[i] = branchIndexes[i] * BRANCH_SIZE;
@@ -425,7 +435,7 @@ void impacts(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1,
     }
 
     for (int step = 0; step < blastRadius; ++step) {
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < BRANCHS; ++i) {
             int index = step + starts[i];
             if (pixelDowns[i] <= branchEnds[i]) {
                 setPixel(pixelDowns[i], mainColor1.red, mainColor1.green, mainColor1.blue, 0);
@@ -457,51 +467,129 @@ void impacts(int blastRadius, int tailTotal, CRGB centralColor, CRGB mainColor1,
             pixelUps[i]--;
         }
         showStrip();
-        delay((step) * 8);
+        delay((step) * delayFactor);
+    }
+    if (fadingOut) {
+        fadeOut(80, 20);
     }
 }
 
 void doImpact() {
-    CRGB colors[5] = {CRGB(0xff, 0, 0), CRGB(0xff, 0xff, 0), CRGB(0xff, 0xa5, 0), CRGB(0, 0xff, 0), CRGB(0, 0, 0xff)};
-    for (int i = 0; i < 20; ++i) {
-        int colorIndex = random(5);
-        impacts(15, 8, CRGB(0xff, 0xff, 0), colors[colorIndex], colors[colorIndex]);
+    CRGB colors[7] = {CRGB(0xff, 0xff, 0xff), CRGB(0xff, 0, 0), CRGB(0xff, 0xff, 0), CRGB(0xff, 0xa5, 0), CRGB(0, 0xff, 0), CRGB(0, 0, 0xff), CRGB(0, 0, 0)};
+    for (int i = 1; i < 15; ++i) {
+        int colorIndex = random(1, 6);
+        impact(15, 8, CRGB(0xff, 0xff, 0), colors[colorIndex], colors[colorIndex], 8);
+    }
+    for (int i = 0; i < 10; ++i) {
+        int colorIndex = random(1, 6);
+        if (i < 9) {
+            impacts(10, 6, CRGB(0xff, 0xff, 0), colors[colorIndex], colors[colorIndex], 12, true);
+        }
+        else {
+            impacts(30, 10, CRGB(0xff, 0xff, 0), colors[colorIndex], colors[colorIndex], 2, false);
+        }
+    }
+
+    starsBlink(30, true, 5, 50, 10, 0, colors, 7);
+}
+
+void train(CRGB color1, CRGB color2, int speed, bool reverse) {
+    CRGB currentColor = color1;
+    int moder = 6;
+    for (int i = 0; i < NUM_LEDS; ++i) {
+        if (i % moder == 0) {
+            currentColor = currentColor == color1 ? color2 : color1;
+            moder = moder == 6 ? 2 : 6;
+        }
+        setPixel(i, currentColor.red, currentColor.green, currentColor.blue, 0);
+    }
+    showStrip();
+    delay(speed);
+    for (int zas = 0; zas < 100; ++zas) {
+        if (reverse) {
+            int nextIndex = 0;
+            for (int i = 0; i < NUM_LEDS; ++i) {
+                nextIndex++;
+                if (nextIndex == NUM_LEDS - 1) {
+                    nextIndex = 0;
+                }
+                leds[i] = leds[nextIndex];
+            }
+        }
+        else {
+            int nextIndex = NUM_LEDS - 1;
+            for (int i = NUM_LEDS - 1; i >= 0; --i) {
+                nextIndex--;
+                if (nextIndex < 0) {
+                    nextIndex = NUM_LEDS - 1;
+                }
+                leds[i] = leds[nextIndex];
+            }
+        }
+        showStrip();
+        delay(speed);
     }
 }
 
+void doTrain() {
+    int colorsSize = 4;
+    CRGB colors[4][4] = {
+        {CRGB(0xff, 0, 0), CRGB(0, 0x33, 0), CRGB(0, 0xff, 0xff), CRGB(0xaa, 0x21, 0)},
+        {CRGB(0, 0, 0xff), CRGB(0, 0x33, 0), CRGB(0xff, 0, 0), CRGB(0, 0x33, 0)},
+        {CRGB(0, 0xff, 0xff), CRGB(0xaa, 0x21, 0), CRGB(0, 0, 0xff), CRGB(0, 0x33, 0)},
+        {CRGB(0, 0xff, 0), CRGB(0x22, 0, 0), CRGB(0, 0x22, 0xff), CRGB(0xaa, 0, 0x34)}
+    };
+    for (int i = 0; i < colorsSize; ++i) {
+        train(colors[i][0], colors[i][1], 65, false);
+        train(colors[i][2], colors[i][3], 65, true);
+    }
+}
+
+bool isNumberInArray(int number, int array[], int arraySize) {
+    for (int i = 0; i < arraySize; ++i) {
+        if (array[i] == number) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void loop() {
-//    doExplosion();
-//    fillingUp();
-//    simpleBlink(CRGB(255, 0, 0), CRGB(255, 255, 0), CRGB(0, 0, 255), CRGB(0, 255, 0));
-    doImpact();
-//    int effects[6] = {-1, -1, -1, -1, -1, -1};
-//    int currentIndex = 0;
-//    while (currentIndex < 6) {
-//        int number = random8(6);
-//        if (!isNumberInArray(number, effects, 6)) {
-//            effects[currentIndex] = number;
-//            ++currentIndex;
-//        }
-//    }
-//    for (int i = 0; i < 6; ++i) {
-//        int effect = effects[i];
-//        if (effect == 0) {
-//            simpleBlink(CRGB(255, 0, 0), CRGB(255, 255, 0), CRGB(0, 0, 255), CRGB(0, 255, 0));
-//        }
-//        if (effect == 1) {
-//            doLoopStarBlink();
-//        }
-//        if (effect == 2) {
-//            doCylon();
-//        }
-//        if (effect == 3) {
-//            doExplosion();
-//        }
-//        if (effect == 4) {
-//            doShootingStar();
-//        }
-//        if (effect == 5) {
-//            doFillingUp();
-//        }
-//    }
+    int effects[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+    int currentIndex = 0;
+    int effectsQtd = 8;
+    while (currentIndex < effectsQtd) {
+        int number = random8(effectsQtd);
+        if (!isNumberInArray(number, effects, effectsQtd)) {
+            effects[currentIndex] = number;
+            ++currentIndex;
+        }
+    }
+    for (int i = 0; i < effectsQtd; ++i) {
+        int effect = effects[i];
+        if (effect == 0) {
+            simpleBlink(CRGB(255, 0, 0), CRGB(255, 255, 0), CRGB(0, 0, 255), CRGB(0, 255, 0));
+        }
+        if (effect == 1) {
+            doLoopStarBlink();
+        }
+        if (effect == 2) {
+            doCylon();
+        }
+        if (effect == 3) {
+            doExplosion();
+        }
+        if (effect == 4) {
+            doShootingStar();
+        }
+        if (effect == 5) {
+            doFillingUp();
+        }
+        if (effect == 6) {
+            doImpact();
+        }
+        if (effect == 7) {
+            doTrain();
+        }
+    }
 }
